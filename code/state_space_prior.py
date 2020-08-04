@@ -12,6 +12,7 @@ import matplotlib as mpl
 from scipy.stats import norm
 
 
+## TODO: turn this into the right gfunc
 def g_func(theta, theta_mu, sigma):
     if sigma != 0:
         G = np.exp(-(theta - theta_mu)**2 / (2 * sigma**2))
@@ -20,32 +21,35 @@ def g_func(theta, theta_mu, sigma):
     return G
 
 
-def simulate(p, rot, mu_f, sig_f):
-    eta_pm = p[0]
-    eta_pu = p[1]
+def simulate(p, *args):
+    eta_mu = p[0]
+    eta_sig = p[1]
     b0_mu = p[2]
     b0_sig = p[3]
     b1 = p[4]
-    mu_p0 = p[5]
-    sig_p0 = p[6]
+    mu_init = p[5]
+    sig_init = p[6]
+
+    rot = args[0]
+    mu_f = args[1]
+    sig_f = args[2]
 
     num_trials = rot.shape[0]
 
     delta_mu = np.zeros(num_trials)
     delta_sig = np.zeros(num_trials)
 
-    theta_values = np.array(
-        [-150, -120, -90, -60, -30, 0, 30, 60, 90, 120, 150])
-    theta_train_ind = np.where(theta_values == 0)[0][0]
-    theta_ind = theta_train_ind * np.ones(num_trials, dtype=np.int8)
+    # TODO: probably best to pass this in from the data file
+    # TODO: Needs to be a numpy vector
+    theta_ind = 0
+    n_tgt = np.unique(theta_ind).shape[0]
 
-    n_tgt = theta_value.shape[0]
     mu_p = np.zeros((n_tgt, num_trials))
     sig_p = np.zeros((n_tgt, num_trials))
-    mu_p[0] = mu_p0
-    sig_p[0] = sig_p0
+    mu_p[0] = mu_init
+    sig_p[0] = sig_init
 
-    for i in range(1, num_trials - 1):
+    for i in range(1, num_trials):
         ind = theta_ind[i]
 
         sp = sig_p[ind, i]**2 / (sig_p[ind, i]**2 + sig_f[ind, i]**2)
@@ -59,12 +63,12 @@ def simulate(p, rot, mu_f, sig_f):
         delta_mu[i] = -2 * (mu_p[ind, i] - (1 - sp) * mu_p[ind, i] -
                             sp * mu_f[ind, i]) * (1 - sp)
 
-        G_mu = g_func(theta_values, theta_values[theta_ind[i]], b0_mu, b1)
+        ## TODO: Think carefully about how to implement / call this function
         G_sig = g_func(theta_values, theta_values[theta_ind[i]], b0_sig, b1)
+        G_mu = g_func(theta_values, theta_values[theta_ind[i]], b0_mu, b1)
 
-        sig_p[:, i +
-              1] = (1 - beta_f) * xf[:, i] - alpha_f * delta_sig[i] * G_sig
-        mu_p[:, i + 1] = (1 - beta_s) * xs[:, i] - alpha_s * delta_mu[i] * G_mu
+        sig_p[:, i + 1] = sig_p[:, i] - eta_sig * delta_sig[i] * G_sig
+        mu_p[:, i + 1] = mu_p[:, i] - eta_mu * delta_mu[i] * G_mu
 
     return (mu_p.T, sig_p.T)
 
@@ -83,10 +87,9 @@ def fit_obj_func_sse(params, *args):
 
 
 def prep_for_fits():
-    d = pd.read_csv('../data/...')
+    d = pd.read_csv('../datta/Bayes_SML_EXP1.csv')
 
-    rot = np.concatenate(
-        (np.zeros(198), 30 * np.ones(110), np.nan * np.ones(66)))
+    rot = d[d['SUBJECT'] == 1].ROT.values
 
     return (d, rot)
 
