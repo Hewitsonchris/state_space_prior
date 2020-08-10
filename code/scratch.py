@@ -6,31 +6,124 @@ import matplotlib.cm as cm
 from scipy.optimize import differential_evolution
 from scipy.optimize import LinearConstraint
 
+
+def fit():
+
+    group = 1
+
+    # eta_mu = params[0]
+    # eta_sig = params[1]
+    # b0_mu = params[2]
+    # b0_sig = params[3]
+    # b1 = params[4]
+    # mu_init = params[5]
+    # sig_init = params[6]
+
+    # constraints = LinearConstraint(A=[[1, 0, 0, -1, 0, 0, 0, 0],
+    #                                   [0, 1, 0, 0, -1, 0, 0, 0],
+    #                                   [0, 0, 0, 0, 0, 0, 0, 0],
+    #                                   [0, 0, 0, 0, 0, 0, 0, 0],
+    #                                   [0, 0, 0, 0, 0, 0, 0, 0],
+    #                                   [0, 0, 0, 0, 0, 0, 0, 0],
+    #                                   [0, 0, 0, 0, 0, 0, 0, 0],
+    #                                   [0, 0, 0, 0, 0, 0, 0, 0]],
+    #                                lb=[-1, -1, 0, 0, 0, 0, 0, 0],
+    #                                ub=[0, 0, 0, 0, 0, 0, 0, 0])
+
+    bounds = ((0, 1), (0, 1), (1, 10), (1, 10), (1, 10), (-45, 45), (2, 10))
+
+    args = [group]
+
+    differential_evolution(func=obj_func,
+                           bounds=bounds,
+                           args=args,
+                           disp=True,
+                           maxiter=300,
+                           tol=1e-15,
+                           disp=False,
+                           polish=False,
+                           updating='deferred',
+                           workers=-1)
+
+
 def obj_func(params, *args):
     '''
     params: collection of free paraameter values
     *arags: fixed parameters et al.
     '''
+
+    group = args[0]
+
+    obs = get_observed(group)
+    args = obs[0]
+    mu_p_obs = obs[1]
+    sig_p_obs = obs[2]
+    mu_p_obs = np.reshape(mu_p_obs, (1, mu_p_obs.shape[0]))
+    sig_p_obs = np.reshape(sig_p_obs, (1, sig_p_obs.shape[0]))
+
     x_pred = simulate(params, args)
-    x_obs = get_observed()
-    sse = np.sum(x_pred**2 - x_obs**2) # NOTE: Check this syntax
+    mu_p_pred = x_pred[0]
+    sig_p_pred = x_pred[1]
+
+    # plt.plot(mu_p_obs[0, :], '-b')
+    # plt.plot(mu_p_pred[0, :], '-r')
+    # plt.show()
+
+    # plt.plot(sig_p_obs[0, :], '-b')
+    # plt.plot(sig_p_pred[0, :], '-r')
+    # plt.show()
+
+    sse_mu_p = np.sum((mu_p_pred - mu_p_obs)**2)
+    sse_sig_p = np.sum((sig_p_pred - sig_p_obs)**2)
+    sse = sse_mu_p + sse_sig_p
+
     return sse
 
 
-def get_observed():
-    d = pd.read_csv('../datta/Bayes_SML_EXP1_updated.csv')
+def get_observed(group):
+    d = pd.read_csv('../datta/Bayes_SML_EXP1_060820.csv')
 
     # Get args
     rot = d[d.SUBJECT == 1].ROT.values
     theta_values = np.unique(d[d.SUBJECT == 1].TARGET.values)
-    mu_f = d[d.SUBJECT==1].CA_INIT.values
-    sig_f = d[d.SUBJECT==1].SIG_MP.values
+    mu_f = d[d.SUBJECT == 1].CA_INIT.values
+    sig_f = d[d.SUBJECT == 1].SIG_MP.values
+    mu_f = np.reshape(mu_f, (1, mu_f.shape[0]))
+    sig_f = np.reshape(sig_f, (1, sig_f.shape[0]))
     args = (rot, theta_values, mu_f, sig_f)
 
-    # TODO: estimate prior mean with mean across subjects HA_initial[t + 1]
-    # TODO: estimate prior uncertainty with sd across subjects HA_initial[t + 1]
+    ## Add a column that indicates absolute trial number
+    n_trials = d.groupby('PHASE').max()['TRIAL'].sum()
+    n_subs = d['SUBJECT'].unique().shape[0]
 
-    return args
+    d.replace('Baseline', '1', inplace=True)
+    d.replace('Adaptation', '2', inplace=True)
+    d.replace('Washout', '3', inplace=True)
+
+    d.sort_values(['GROUP', 'SUBJECT', 'PHASE', 'TRIAL'], inplace=True)
+    d['TRIAL_ABS'] = np.tile(np.arange(1, n_trials + 1), n_subs)
+
+    # estimate prior mean with mean across subjects HA_initial[t + 1]
+    dd_mu = d.groupby(['GROUP',
+                       'TRIAL_ABS']).mean()['HA_INITIAL'].reset_index()
+    prior_mu_obs = dd_mu[dd_mu['GROUP'] == group]['HA_INITIAL'].values
+
+    # plt.plot(dd[dd['GROUP'] == 0].TRIAL_ABS.values,
+    #          dd[dd['GROUP'] == 0].HA_INITIAL.values, '.')
+    # plt.show()
+
+    # estimate prior uncertainty with sd across subjects HA_initial[t + 1]
+    dd_sig = d.groupby(['GROUP',
+                        'TRIAL_ABS']).std()['HA_INITIAL'].reset_index()
+    dd_sig = dd_sig[dd_sig['GROUP'] == group]
+    prior_sig_obs = dd_sig[dd_sig['GROUP'] == group]['HA_INITIAL'].values
+
+    # plt.plot(dd[dd['GROUP'] == 0].TRIAL_ABS.values,
+    #          dd[dd['GROUP'] == 0].HA_INITIAL.values, '.')
+    # plt.show()
+
+    return (args, prior_mu_obs, prior_sig_obs)
+
 
 # Define a function to compute how much learning from
 # the current reach will generalise to the remaining
@@ -45,7 +138,8 @@ def g_func(theta_g, theta_r, b0, b1):
     alpha = (b0 + np.exp(b1))
     return b0 + np.exp(b1 * np.cos(np.deg2rad(theta_g - theta_r))) / alpha
 
-def simulate(params, *args):
+
+def simulate(params, args):
 
     # Define the parameters of the model. Ultimately, we want
     # to write this code as a function that can be passed to a
@@ -136,8 +230,8 @@ def simulate(params, *args):
                                 mu_f[ind, i]) * sf * 2 * sig_p[ind, i]
 
         # Virtually unintelligible, yet correct. Please consult the paper
-        delta_mu[i] = -2 * (mu_p[ind, i] -
-                            (1 - sp) * mu_p[ind, i] - sp * mu_f[ind, i]) * (1 - sp)
+        delta_mu[i] = -2 * (mu_p[ind, i] - (1 - sp) * mu_p[ind, i] -
+                            sp * mu_f[ind, i]) * (1 - sp)
 
         # compute how much learning from the current reach will
         # generalise to the remaining (not reached to) targets.
@@ -149,6 +243,7 @@ def simulate(params, *args):
         mu_p[:, i + 1] = mu_p[:, i] - eta_mu * delta_mu[i] * G_mu
 
     return (mu_p, sig_p)
+
 
 # fig, ax = plt.subplots(nrows=1, ncols=2)
 # c = cm.rainbow(np.linspace(0, 1, 11))

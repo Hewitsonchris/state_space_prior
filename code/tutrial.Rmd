@@ -320,25 +320,12 @@ plt.show()
 
 ```{python}
 
-def obj_func(params, *args):
-    '''
-    params: collection of free paraameter values
-    *arags: fixed parameters et al.
-    '''
-    x_pred = simulate(params, args)
-    x_obs = get_observed()
-    sse = np.sum(x_pred**2 - x_obs**2) # NOTE: Check this syntax
-    return sse
-
 def simulate(params, *args):
-    pass
-
-def get_observed():
     pass
 
 ```
 
-- Once these function is defined, we ask
+- Once these functions are defined, we ask
   `differential_evolution()` to find us best fits as
   follows.
 
