@@ -1,0 +1,48 @@
+---
+title: "Feedback control state-space model"
+author: "Author: Matthew J. Crossley"
+date: "Last update: `r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    toc: false
+    toc_float:
+        collapsed: true
+        smooth_scroll: true
+    toc_depth: 4
+    fig_caption: yes
+    number_sections: false
+    theme: cerulean
+fontsize: 14pt
+---
+
+We begin by stating that the total motor output is the sum
+of a feedforward motor output and a feedback motor output:
+
+\begin{align}
+\tau_{\text{total}_t}= \tau_{\text{ff}_t} + \tau_{\text{fb}_t}
+\end{align}
+
+We define the feedforward motor output using a standard
+state-space model:
+
+\begin{align}
+\delta_{t} = y_{t}^* - y_{t} \\
+x_{t+1} = \beta x_{t} + \alpha \delta_{t} \\
+y_{t} = x_{t} + r_{t} + b_{t}\\
+\tau_{\text{ff}_t} = y_{t} \\
+\end{align}
+
+We define the feedback motor output as proportional to the
+negative of the error signal (i.e., feedback attempts to
+compensate for experienced errors).
+
+\begin{align}
+\tau_{\text{fb}_t} = - \gamma \delta_{t} \\
+\end{align}
+
+
+```{python, engine.path = '/Users/mq20185996/miniconda3/bin/python'}
+
+print('hello world')
+
+```
