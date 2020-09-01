@@ -7,6 +7,191 @@ from scipy.optimize import differential_evolution
 from scipy.optimize import LinearConstraint
 
 
+def prep_data():
+    pass
+    # f1 = '../datta/exp1.csv'
+    # f2 = '../datta/exp2.csv'
+    # f3 = '../datta/exp3.csv'
+    # f4 = '../datta/exp4.csv'
+    # ff = [f1, f2, f3, f4]
+
+    # pf1 = '../fits/fit_individual_1.txt'
+    # pf2 = '../fits/fit_individual_2.txt'
+    # pf3 = '../fits/fit_individual_3.txt'
+    # pf4 = '../fits/fit_individual_4.txt'
+    # pf = [pf1, pf2, pf3, pf4]
+
+    # d1 = pd.read_csv(f1)
+    # d2 = pd.read_csv(f2)
+    # d3 = pd.read_csv(f3)
+    # d4 = pd.read_csv(f4)
+
+    # d1 = d1[d1['TRIAL_ABS'] < 191]
+    # d2 = d2[d2['TRIAL_ABS'] < 191]
+    # d3 = d3[d3['TRIAL_ABS'] < 191]
+    # d3['GROUP'] = [2] * d3.shape[0]
+    # d4['GROUP'] = [3] * d4.shape[0]
+    # d4['ROT'] = -d4['ROT']
+
+    # d1.to_csv('../datta/exp1.csv')
+    # d2.to_csv('../datta/exp2.csv')
+    # d3.to_csv('../datta/exp3.csv')
+    # d4.to_csv('../datta/exp4.csv')
+
+
+def fit_validate(fin, fout, bounds, maxiter):
+
+    for i in range(len(fin)):
+
+        p = np.loadtxt(fout[i], delimiter=',')
+
+        d = pd.read_csv(fin[i])
+        subs = d['SUBJECT'].unique()
+
+        for s in range(subs.shape[0]):
+
+            dd = d[d['SUBJECT'] == subs[s]]
+            rot = dd['ROT'].values
+            sig_mp = dd['SIG_MP'].values
+            group = dd['GROUP'].values
+            args = (rot, sig_mp, group)
+
+            ## simulate data from best fitting params
+            pp = p[s, :-1]
+            (y, yff, yfb, xff, xfb) = simulate(pp, args)
+
+            ## try to recover best fitting params
+            x_obs_mp = yff
+            x_obs_ep = y
+            args = (rot, sig_mp, x_obs_mp, x_obs_ep, group)
+
+            results = differential_evolution(func=obj_func_individual,
+                                             bounds=bounds,
+                                             args=args,
+                                             disp=True,
+                                             maxiter=maxiter,
+                                             tol=1e-15,
+                                             polish=True,
+                                             updating='deferred',
+                                             workers=-1)
+
+            with open(fout[i][:-4] + '_val.txt', 'a') as f:
+                tmp = np.concatenate((results['x'], [results['fun']]))
+                tmp = np.reshape(tmp, (tmp.shape[0], 1))
+                np.savetxt(f, tmp.T, '%0.4f', delimiter=',', newline='\n')
+
+
+def inspect_validated_fits(fin, fout):
+
+    for i in range(len(fin)):
+        print(i)
+
+        pin = np.loadtxt(fin[i], delimiter=',')
+        pout = np.loadtxt(fout[i], delimiter=',')
+
+        pin = pin[:, :-1]
+        pout = pout[:, :-1]
+
+        pin[:, -3:] /= 5
+        pout[:, -3:] /= 5
+
+        names = [
+            'alpha_ff', 'beta_ff', 'alpha_fb', 'beta_fb', 'base_fb', 'w',
+            'gamma_ff', 'gamma_fb', 'gamma_fb2'
+        ]
+
+        fig, ax = plt.subplots(3, 3, figsize=(10,10))
+        ax = ax.flatten()
+        for j in range(pin.shape[1]):
+
+            ax[j].plot(pin[:, j], pout[:, j], '.')
+            ax[j].plot([-1, 1], [-1, 1], '--k', alpha=0.5)
+            ax[j].set_title(names[j])
+
+        plt.tight_layout()
+        # plt.show()
+        plt.savefig('../figures/fit_val_' + str(i) +'.pdf')
+
+
+def inspect_fits_individual_all(fin, fout):
+
+    fig, ax = plt.subplots(len(fin), 3, figsize=(15, 10), squeeze=False)
+
+    for i in range(len(fin)):
+
+        d = pd.read_csv(fin[i])
+
+        dd = d[['TRIAL_ABS', 'HA_INIT', 'HA_END', 'ROT', 'SIG_MP',
+                'GROUP']].groupby(['TRIAL_ABS']).mean()
+        dd.reset_index(inplace=True)
+
+        x_obs_mp = dd['HA_INIT'].values
+        x_obs_ep = dd['HA_END'].values
+
+        p = np.loadtxt(fout[i], delimiter=',')
+
+        subs = d['SUBJECT'].unique()
+        yrec = np.zeros((subs.shape[0], dd.shape[0]))
+        yffrec = np.zeros((subs.shape[0], dd.shape[0]))
+        yfbrec = np.zeros((subs.shape[0], dd.shape[0]))
+        xffrec = np.zeros((subs.shape[0], dd.shape[0]))
+        xfbrec = np.zeros((subs.shape[0], dd.shape[0]))
+
+        for s in range(subs.shape[0]):
+            dd = d[d['SUBJECT'] == subs[s]]
+            rot = dd['ROT'].values
+            sig_mp = dd['SIG_MP'].values
+            group = dd['GROUP'].values
+            args = (rot, sig_mp, group)
+            pp = p[s, :-1]
+            (y, yff, yfb, xff, xfb) = simulate(pp, args)
+            yrec[s, :] = y
+            yffrec[s, :] = yff
+
+        y = np.mean(yrec, axis=0)
+        yff = np.mean(yffrec, axis=0)
+        yfb = np.mean(yfbrec, axis=0)
+        xff = np.mean(xffrec, axis=0)
+        xfb = np.mean(xfbrec, axis=0)
+
+        # ax[i, 0].plot(np.arange(0, rot.shape[0], 1), -rot, '-k', alpha=1)
+        ax[i, 0].plot(np.arange(0, rot.shape[0], 1), y, '.C0', alpha=.5)
+        ax[i, 0].plot(np.arange(0, rot.shape[0], 1), yff, '.C1', alpha=.5)
+        ax[i, 0].plot(np.arange(0, rot.shape[0], 1), x_obs_ep, 'C0', alpha=0.5)
+        ax[i, 0].plot(np.arange(0, rot.shape[0], 1), x_obs_mp, 'C1', alpha=0.5)
+        # ax[i, 0].legend(['Model EP', 'Model MP', 'Human EP', 'Human MP'])
+        # ax[i, 0].set_xlabel('Trial')
+        # ax[i, 0].set_ylabel('Hand Angle')
+        # ax[i, 0].set_ylim([-10, 35])
+
+        ax[i, 1].plot(np.arange(0, rot.shape[0], 1), y, '-', alpha=1)
+        ax[i, 1].plot(np.arange(0, rot.shape[0], 1), yff, '-', alpha=1)
+        ax[i, 1].plot(np.arange(0, rot.shape[0], 1), yfb, '-', alpha=1)
+        ax[i, 1].plot(np.arange(0, rot.shape[0], 1), xff, '-', alpha=1)
+        ax[i, 1].plot(np.arange(0, rot.shape[0], 1), xfb, '-', alpha=1)
+        ax[i, 1].legend(['y', 'yff', 'yfb', 'xff', 'xfb'], loc='upper right')
+        # ax[i, 1].set_xlabel('Trial')
+        # ax[i, 1].set_ylabel('Hand Angle (degrees)')
+
+        # p[:, -3:-1] /= 10
+
+        xticks = np.arange(1, p.shape[1], 1)
+        ax[i, 2].violinplot(p[:, :-1])
+        for ii in range(p.shape[0]):
+            ax[i, 2].plot(xticks, p[ii, :-1], '.k')
+        ax[i, 2].plot([1, p.shape[1]], [0, 0], '--k', alpha=0.25)
+        ax[i, 2].set_xticks(xticks)
+        ax[i, 2].set_xticklabels([
+            'alpha_ff', 'beta_ff', 'alpha_fb', 'beta_fb', 'base_fb', 'w',
+            'gamma_ff', 'gamma_fb', 'gamma_fb2'
+        ],
+                                 rotation=45,
+                                 ha="right")
+
+    # plt.show()
+    plt.savefig('../figures/fit_summary.pdf')
+
+
 def inspect_fits_individual():
 
     p = np.loadtxt('../fits/fit_individual.txt')
@@ -224,60 +409,57 @@ def fit_boot():
 def callback(xk, convergence):
     print(xk)
     print('\n')
-    return (False)
+
+    return False
 
 
-def fit_individual():
+def fit_individual(fin, fout, bounds, maxiter):
+    for i in range(len(fin)):
+        d = pd.read_csv(fin[i])
+        for sub in d['SUBJECT'].unique():
 
-    # alpha_ff = params[0]
-    # beta_ff = params[1]
-    # alpha_fb = params[2]
-    # beta_fb = params[3]
-    # base_fb = params[4]
-    # w = params[5]
-    # gamma_ff = params[6]
-    # gamma_fb = params[7]
-    # gamma_fb2 = params[8]
+            dd = d[d['SUBJECT'] == sub][[
+                'ROT', 'HA_INIT', 'HA_END', 'TRIAL_ABS', 'GROUP'
+            ]]
 
-    bounds = ((0, 1), (0, 1), (0, 1), (0, 1), (0, 1), (0, 1), (-10, 10),
-              (-10, 10), (-10, 10))
+            dd.reset_index(inplace=True)
 
-    # read exp 3 data
-    d3 = pd.read_csv('../datta/MRES_ADAPT.csv')
-    for sub in d3['SUBJECT'].unique():
+            rot = dd.ROT.values
+            sig_mp = d[d.SUBJECT == sub].SIG_MP.values
+            group = dd.GROUP.values
+            x_obs_mp = dd['HA_INIT'].values
+            x_obs_ep = dd['HA_END'].values
 
-        dd3 = d3[d3['SUBJECT'] == sub][[
-            'ROTATION', 'HA_INIT', 'HA_END', 'TRIAL_ABS'
-        ]]
+            args = (rot, sig_mp, x_obs_mp, x_obs_ep, group)
 
-        dd3.reset_index(inplace=True)
+            results = differential_evolution(
+                func=obj_func_individual,
+                bounds=bounds,
+                args=args,
+                # callback=callback,
+                disp=True,
+                maxiter=maxiter,
+                tol=1e-15,
+                polish=True,
+                updating='deferred',
+                workers=-1)
 
-        rot3 = -dd3.ROTATION.values
-        sig_mp3 = d3[d3.SUBJECT == sub].SIG_MP.values
+            # print(results['x'])
+            # (y, yff, yfb, xff, xfb) = simulate(results['x'], args)
+            # fig, ax = plt.subplots(2, 1)
+            # ax[0].plot(rot, 'k', alpha = 1)
+            # ax[0].plot(x_obs_mp, 'C1', alpha = 0.2)
+            # ax[0].plot(x_obs_ep, 'C0', alpha = 0.2)
+            # ax[0].plot(yff, '.C1', alpha = 0.2)
+            # ax[0].plot(y, '.C0', alpha = 0.2)
+            # ax[1].plot(xff, '.C1', alpha = 0.2)
+            # ax[1].plot(xfb, '.C0', alpha = 0.2)
+            # plt.show()
 
-        x_obs_mp3 = dd3['HA_INIT'].values
-        x_obs_ep3 = dd3['HA_END'].values
-
-        args = (rot3, sig_mp3, x_obs_mp3, x_obs_ep3)
-
-        # fit both groups simultaneously
-        # i.e., impose same parameters on all groups
-        results = differential_evolution(
-            func=obj_func_individual,
-            bounds=bounds,
-            args=args,
-            # callback=callback,
-            disp=True,
-            maxiter=200,
-            tol=1e-15,
-            polish=False,
-            updating='deferred',
-            workers=-1)
-
-        f_name_p = '../fits/fit_individual.txt'
-        with open(f_name_p, 'a') as f:
-            np.savetxt(f, np.concatenate((results['x'], [results['fun']])),
-                       '%0.4f', ',')
+            with open(fout[i], 'a') as f:
+                tmp = np.concatenate((results['x'], [results['fun']]))
+                tmp = np.reshape(tmp, (tmp.shape[0], 1))
+                np.savetxt(f, tmp.T, '%0.4f', delimiter=',', newline='\n')
 
 
 def fit():
@@ -369,23 +551,22 @@ def obj_func_individual(params, *args):
 
     obs = args
 
-    rot3 = obs[0]
-    sig_mp3 = obs[1]
-    x_obs_mp3 = obs[2]
-    x_obs_ep3 = obs[3]
+    rot = obs[0]
+    sig_mp = obs[1]
+    x_obs_mp = obs[2]
+    x_obs_ep = obs[3]
+    group = obs[4]
 
-    args3 = (rot3, sig_mp3)
+    args = (rot, sig_mp, group)
 
-    x_pred3 = simulate(params, args3, group=3)
-    x_pred_mp3 = x_pred3[1]
-    x_pred_ep3 = x_pred3[0]
+    x_pred = simulate(params, args)
+    x_pred_mp = x_pred[1]
+    x_pred_ep = x_pred[0]
 
-    sse_mp3 = np.sum((x_obs_mp3 - x_pred_mp3)**2)
-    sse_ep3 = np.sum((x_obs_ep3 - x_pred_ep3)**2)
+    sse_mp = np.sum((x_obs_mp - x_pred_mp)**2)
+    sse_ep = np.sum((x_obs_ep - x_pred_ep)**2)
 
-    w = 0.5
-
-    sse = w * sse_mp3 + (1 - w) * sse_ep3
+    sse = sse_mp + sse_ep
 
     return sse
 
@@ -548,7 +729,7 @@ def plot_slopes():
     # plt.show()
 
 
-def simulate(params, args, group=None):
+def simulate(params, args):
 
     alpha_ff = params[0]
     beta_ff = params[1]
@@ -562,6 +743,7 @@ def simulate(params, args, group=None):
 
     r = args[0]
     sig_mp = args[1]
+    group = args[2]
 
     n_trials = r.shape[0]
 
@@ -606,7 +788,7 @@ def simulate(params, args, group=None):
         else:
             delta_ep[i] = 0.0
 
-        if group == 1:
+        if group[i] == 1:
             delta_ep[i] = 0.0
 
         xff[i + 1] = beta_ff * xff[i] + bayes_mod_ff * alpha_ff * (
@@ -615,8 +797,7 @@ def simulate(params, args, group=None):
         xfb[i + 1] = beta_fb * xfb[i] + bayes_mod_fb * alpha_fb * delta_ep[
             i] + base_fb
 
-        # TODO: Is this okay?
-        xfb = np.clip(xfb, -5, 5)
+        xfb = np.clip(xfb, -1.5, 1.5)
 
     return (y, yff, yfb, xff, xfb)
 
@@ -624,7 +805,7 @@ def simulate(params, args, group=None):
 def bayes_int(x, m):
 
     # x = np.arange(1, 3, 0.01)
-    # plt.plot(x, np.tanh(5 * (x - 2)) / 2 + 0.5)
+    # plt.plot(x, np.tanh(1 * (x - 2)) / 2 + 0.5)
     # plt.show()
 
     return np.tanh(m * (x - 2)) / 2 + 0.5
@@ -651,10 +832,36 @@ def bootstrap_t(x_obs, y_obs, x_samp_dist, y_samp_dist, n):
     return (p_null)
 
 
+# [alpha_ff, beta_ff, alpha_fb, beta_fb, base_fb, w, gamma_ff, gamma_fb, gamma_fb2]
+b = ((0, 1), (0, 1), (0, 1), (0, 1), (0, 1), (0, 1), (-5, 5), (-5, 5), (-5, 5))
+m = 1000
 
-fit()
-# fit_boot()
-# inspect_fits()
+fin1 = '../datta/exp1.csv'
+fin2 = '../datta/exp2.csv'
+fin3 = '../datta/exp3.csv'
+fin4 = '../datta/exp4.csv'
+fin = [fin1, fin2, fin3, fin4]
 
-fit_individual()
-# inspect_fits_individual()
+fout1 = '../fits/fit_individual_1.txt'
+fout2 = '../fits/fit_individual_2.txt'
+fout3 = '../fits/fit_individual_3.txt'
+fout4 = '../fits/fit_individual_4.txt'
+fout = [fout1, fout2, fout3, fout4]
+
+# fit_individual(fin, fout, b, m)
+inspect_fits_individual_all(fin, fout)
+# fit_validate(fin, fout, b, m)
+
+fin1 = '../fits/fit_individual_1.txt'
+fin2 = '../fits/fit_individual_2.txt'
+fin3 = '../fits/fit_individual_3.txt'
+fin4 = '../fits/fit_individual_4.txt'
+fin = [fin1, fin2, fin3, fin4]
+
+fout1 = '../fits/fit_individual_1_val.txt'
+fout2 = '../fits/fit_individual_2_val.txt'
+fout3 = '../fits/fit_individual_3_val.txt'
+fout4 = '../fits/fit_individual_4_val.txt'
+fout = [fout1, fout2, fout3, fout4]
+
+inspect_validated_fits(fin, fout)
