@@ -24,12 +24,6 @@ def load_all_data():
 
 
 def inspect_behaviour():
-
-    d = load_all_data()
-
-    dd = d.groupby(['GROUP', 'TRIAL_ABS'])[['HA_INIT',
-                                            'HA_END']].mean().reset_index()
-
     # Group 0: sparse EP + no feedback washout
     # Group 1: no EP + no feedback washout
     # Group 2: all EP + 0 deg uniform washout
@@ -44,6 +38,114 @@ def inspect_behaviour():
     # Group 11: bimodal stochastic (N=12, groups 11 and 12) + no fb wash
     # Group 12: bimodal stochastic (N=12, groups 11 and 12) + no fb wash
 
+    d = load_all_data()
+
+    # d[d['TRIAL_ABS'] < 100].groupby('SIG_MP')['HA_END', 'ROT'].plot(
+    #     x='HA_END', y='ROT', kind='scatter')
+    # plt.show()
+
+    dd = d.groupby(['GROUP', 'TRIAL_ABS',
+                    'SIG_MP'])[['HA_INIT', 'HA_MID', 'HA_END',
+                                'ROT']].mean().reset_index()
+
+    # dd1 = dd[dd['GROUP'] == 1][11:190]
+    # d1 = dd1[dd1['SIG_MP'] == 1]['HA_INIT'].values
+    # r1 = dd1[dd1['SIG_MP'] == 1]['ROT'].values
+    # d2 = dd1[dd1['SIG_MP'] == 2]['HA_INIT'].values
+    # r2 = dd1[dd1['SIG_MP'] == 2]['ROT'].values
+    # d3 = dd1[dd1['SIG_MP'] == 3]['HA_INIT'].values
+    # r3 = dd1[dd1['SIG_MP'] == 3]['ROT'].values
+    # d4 = dd1[dd1['SIG_MP'] == 4]['HA_INIT'].values
+    # r4 = dd1[dd1['SIG_MP'] == 4]['ROT'].values
+    # e1 = r1 - d1
+    # e2 = r2 - d2
+    # e3 = r3 - d3
+    # e4 = r4 - d4
+    # # plt.plot(r1[0:-1], d1[1:], 'o')
+    # # plt.plot(r2[0:-1], d2[1:], 'o')
+    # # plt.plot(r3[0:-1], d3[1:], 'o')
+    # # plt.plot(r4[0:-1], d4[1:], 'o')
+    # plt.plot(e1, np.diff(d1, prepend=0), 'o')
+    # plt.plot(e2, np.diff(d2, prepend=0), 'o')
+    # plt.plot(e3, np.diff(d3, prepend=0), 'o')
+    # plt.plot(e4, np.diff(d4, prepend=0), 'o')
+    # # plt.legend(['SIG_MP = 1', 'SIG_MP = 2', 'SIG_MP = 3', 'SIG_MP = 4'])
+    # plt.show()
+
+    fig, ax = plt.subplots(1, 1)
+    dd[dd['GROUP'] == 7].plot.scatter(x='TRIAL_ABS',
+                                      y='HA_INIT',
+                                      c='C0',
+                                      marker='o',
+                                      ax=ax)
+    dd[dd['GROUP'] == 7].plot.scatter(x='TRIAL_ABS',
+                                      y='HA_END',
+                                      c='C0',
+                                      marker='v',
+                                      ax=ax)
+    dd[dd['GROUP'] == 8].plot.scatter(x='TRIAL_ABS',
+                                      y='HA_INIT',
+                                      c='C1',
+                                      marker='o',
+                                      ax=ax)
+    dd[dd['GROUP'] == 8].plot.scatter(x='TRIAL_ABS',
+                                      y='HA_END',
+                                      c='C1',
+                                      marker='v',
+                                      ax=ax)
+    plt.show()
+
+    dd[dd['GROUP'] == 1].plot.scatter(x='TRIAL_ABS',
+                                      y='HA_INIT',
+                                      c='SIG_MP',
+                                      colormap='viridis')
+    plt.show()
+
+    # delta hand_angle as function of error size
+    ha_ep = dd[dd['GROUP'] == 7]['HA_END'].values
+    ha_mp = dd[dd['GROUP'] == 7]['HA_INIT'].values
+    rot = dd[dd['GROUP'] == 7]['ROT'].values
+    sig_mp = dd[dd['GROUP'] == 7]['SIG_MP'].values
+    err_ha_mp = ha_mp - rot
+    err_ha_ep = ha_ep - rot
+    delta_ha_mp = np.diff(ha_mp, prepend=[0])
+    delta_ha_ep = np.diff(ha_ep, prepend=[0])
+
+    fig, ax = plt.subplots(2, 2)
+
+    c = ['C0', 'C1', 'C2', 'C3', 'C4']
+    for i in np.unique(sig_mp):
+        ax[0, 0].plot(err_ha_mp[sig_mp == i],
+                      delta_ha_mp[sig_mp == i],
+                      'o',
+                      alpha=0.5)
+        ax[0, 0].set_xlabel('MP error size')
+        ax[0, 0].set_ylabel('delta hand angle MP')
+
+        ax[0, 1].plot(err_ha_mp[sig_mp == i],
+                      delta_ha_ep[sig_mp == i],
+                      'o',
+                      alpha=0.5)
+        ax[0, 1].set_xlabel('MP error size')
+        ax[0, 1].set_ylabel('delta hand angle EP')
+
+        ax[1, 0].plot(err_ha_ep[sig_mp == i],
+                      delta_ha_mp[sig_mp == i],
+                      'o',
+                      alpha=0.5)
+        ax[1, 0].set_xlabel('EP error size')
+        ax[1, 0].set_ylabel('delta hand angle MP')
+
+        ax[1, 1].plot(err_ha_ep[sig_mp == i],
+                      delta_ha_ep[sig_mp == i],
+                      'o',
+                      alpha=0.5)
+        ax[1, 1].set_xlabel('EP error size')
+        ax[1, 1].set_ylabel('delta hand angle EP')
+
+    plt.tight_layout()
+    plt.show()
+
     fig = plt.figure(figsize=(10, 5))
     gs = fig.add_gridspec(3, 5)
     g = 0
@@ -54,7 +156,7 @@ def inspect_behaviour():
             ax.plot(ddd['TRIAL_ABS'], ddd['HA_END'], '.', alpha=0.75)
             ax.plot(ddd['TRIAL_ABS'], ddd['HA_INIT'], '.', alpha=0.75)
             ax.set_title('Group ' + str(ddd['GROUP'].unique()))
-            # ax.set_ylim([-30, 30])
+            ax.set_ylim([-30, 30])
             g += 1
     plt.tight_layout()
     plt.show()
@@ -127,9 +229,117 @@ def inspect_fits_validate(d, froot):
         plt.savefig('../figures/fit_val_' + str(i) + '.pdf')
 
 
+def inspect_fits_individual_model_compare(d):
+
+    n_params = 10
+
+    subs = d['SUBJECT'].unique()
+
+    xlabel = [
+        'All nonzero', 'Zero FF learning', 'Zero FB learning',
+        'Zero FB control', 'Nonzero FF Learning', 'Nonzero FB learning',
+        'Nonzero FB control', 'All zero'
+    ]
+
+    n_models = len(xlabel)
+    print(n_models)
+    aic = np.zeros((n_models, subs.shape[0]))
+    bic = np.zeros((n_models, subs.shape[0]))
+    k_list = [9, 8, 8, 8, 7, 7, 7, 6]
+    for i in range(n_models):
+        froot = '../fits/fit_kw_adapt_' + str(i) + '_'
+
+        prec = np.zeros((subs.shape[0], n_params))
+
+        for s in range(subs.shape[0]):
+            dd = d[d['SUBJECT'] == s + 1]
+
+            x_obs_mp = dd['HA_INIT'].values
+            x_obs_ep = dd['HA_END'].values
+            rot = dd['ROT'].values
+            sig_mp = dd['SIG_MP'].values
+            group = dd['GROUP'].values
+            args = (rot, sig_mp, group)
+
+            fname = froot + str(s + 1) + '.txt'
+            p = np.loadtxt(fname, delimiter=',')
+            prec[s, :] = p
+            (y, yff, yfb, xff, xfb) = simulate(p[:-1], args)
+            ss_tot_mp = np.nansum((x_obs_mp - np.nanmean(x_obs_mp))**2)
+            ss_reg_mp = np.nansum((yff - np.nanmean(x_obs_mp))**2)
+            ss_res_mp = np.nansum((x_obs_mp - yff)**2)
+            ss_tot_ep = np.nansum((x_obs_ep - np.nanmean(x_obs_ep))**2)
+            ss_reg_ep = np.nansum((y - np.nanmean(x_obs_ep))**2)
+            ss_res_ep = np.nansum((x_obs_ep - y)**2)
+            r_squared = 1 - (ss_res_ep + ss_res_mp) / (ss_tot_ep + ss_tot_mp)
+
+            n = 1080
+            k = k_list[i]
+            bic[i, s] = compute_bic(r_squared, n, k)
+
+        pname = [
+            'alpha_ff', 'beta_ff', 'alpha_fb', 'beta_fb', 'w', 'gamma_ff',
+            'gamma_fb', 'gamma_fb2', 'xfb_init', 'sse'
+        ]
+
+        x = np.arange(1, n_params, 1)
+        plt.plot([1, n_params], [0, 0], '--')
+        plt.violinplot(prec[:, :-1])
+        plt.xticks(x, pname[:-1])
+        for jj in range(prec.shape[0]):
+            plt.plot(x, prec[jj, :-1], '.', alpha=0.5)
+        plt.show()
+
+        tstat, pval = ttest_1samp(prec, popmean=0, axis=0)
+        cd = np.mean(prec, axis=0) / np.std(prec, axis=0, ddof=1)
+
+        print('\n')
+        inds = [5, 6, 7, 9]
+        for j in inds:
+            print(pname[j] + ' = ' + str(np.round(prec[:, j].mean(), 2)) +
+                  ': t(' + str(prec.shape[0] - 1) + ') = ' +
+                  str(np.round(tstat[j], 2)) + ', p = ' +
+                  str(np.round(pval[j], 2)) + ', d = ' +
+                  str(np.round(cd[j], 2)))
+
+    summed_bic = bic.sum(1)
+    summed_bic = summed_bic - summed_bic[0]
+
+    pbic = np.zeros(n_models)
+    for i in range(n_models):
+        pbic[i] = np.exp(-0.5 * summed_bic[i]) / np.sum(
+            np.exp(-0.5 * summed_bic))
+
+    # print(summed_bic.shape)
+    # print(pbic)
+    # print(pbic.sum())
+
+    # fig, ax = plt.subplots(1, 2)
+    # x = np.arange(1, 8, 1)
+    # ax[0].plot(x, summed_bic, 'o', alpha=1)
+    # ax[0].set_xticks(x)
+    # ax[0].set_xticklabels(xlabel, rotation=30)
+    # ax[0].set_ylabel('Summed BIC')
+    # ax[1].plot(x, pbic, 'o', alpha=1)
+    # ax[1].set_xticks(x)
+    # ax[1].set_xticklabels(xlabel, rotation=30)
+    # ax[1].set_ylabel('P(Model | Data)')
+    # plt.show()
+
+    pbic = np.zeros((n_models, subs.shape[0]))
+    for s in range(subs.shape[0]):
+        for i in range(n_models):
+            pbic[i, s] = np.exp(-0.5 * bic[i, s]) / np.sum(
+                np.exp(-0.5 * bic[:, s]))
+
+    b = pd.DataFrame(pbic.T)
+    b.plot(kind='bar')
+    plt.show()
+
+
 def inspect_fits_individual(d, froot):
 
-    n_params = 9
+    n_params = 10
 
     fig = plt.figure(figsize=(10, 5))
     gs = fig.add_gridspec(1, 1)
@@ -163,7 +373,7 @@ def inspect_fits_individual(d, froot):
         p = np.loadtxt(fname, delimiter=',')
         (y, yff, yfb, xff, xfb) = simulate(p[:-1], args)
 
-        prec[s, :] = p[:-1]
+        prec[s, :] = p
         yrec[s, :] = y
         yffrec[s, :] = yff
         yfbrec[s, :] = yfb
@@ -233,7 +443,19 @@ def inspect_fits_boot(group):
     d = load_all_data()
 
 
-def fit_individual(d, bounds, maxiter, polish, froot):
+def fit_individual(d, fit_args, froot):
+
+    obj_func = fit_args['obj_func']
+    bounds = fit_args['bounds']
+    maxiter = fit_args['maxiter']
+    disp = fit_args['disp']
+    tol = fit_args['tol']
+    polish = fit_args['polish']
+    updating = fit_args['updating']
+    workers = fit_args['workers']
+    popsize = fit_args['popsize']
+    mutation = fit_args['mutation']
+    recombination = fit_args['recombination']
 
     for sub in d['SUBJECT'].unique():
 
@@ -252,12 +474,15 @@ def fit_individual(d, bounds, maxiter, polish, froot):
         results = differential_evolution(func=obj_func,
                                          bounds=bounds,
                                          args=args,
-                                         disp=True,
+                                         disp=disp,
                                          maxiter=maxiter,
-                                         tol=1e-15,
-                                         polish=p,
-                                         updating='deferred',
-                                         workers=-1)
+                                         popsize=popsize,
+                                         mutation=mutation,
+                                         recombination=recombination,
+                                         tol=tol,
+                                         polish=polish,
+                                         updating=updating,
+                                         workers=workers)
 
         fout = froot + str(sub) + '.txt'
         with open(fout, 'w') as f:
@@ -414,8 +639,16 @@ def simulate(params, args):
         if group[i] == 1:
             delta_ep[i] = 0.0
 
-        xff[i + 1] = beta_ff * xff[i] + bayes_mod_ff * alpha_ff * (
-            w * delta_mp[i] + (1 - w) * delta_ep[i]) - alpha_ff * base_ff
+        # xff[i + 1] = beta_ff * xff[i] + bayes_mod_ff * alpha_ff * (
+        #     w * delta_mp[i] + (1 - w) * delta_ep[i]) - alpha_ff * base_ff
+
+        # xff[i + 1] = beta_ff * xff[i] + alpha_ff * (
+        #     w * bayes_mod_ff * delta_mp[i] +
+        #     (1 - w) * delta_ep[i]) - alpha_ff * base_ff
+
+        xff[i + 1] = beta_ff * xff[i] + alpha_ff * (
+            w * delta_mp[i] +
+            (1 - w) * bayes_mod_ff * delta_ep[i]) - alpha_ff * base_ff
 
         xfb[i + 1] = beta_fb * xfb[i] + bayes_mod_fb * alpha_fb * delta_ep[
             i] - alpha_fb * base_fb
@@ -462,43 +695,64 @@ def bootstrap_t(x_obs, y_obs, x_samp_dist, y_samp_dist, n):
     return (p_null)
 
 
-b = ((0, 1), (0, 1), (0, 1), (0, 1), (0, 1), (-50, 50), (-50, 50), (-50, 50),
-     (-2, 2))
-p = False
-nboot = -1
+def compute_aic(rsq, n, k):
+    # aic = 2 * k + n * np.log(sse / n)
+    aic = n * np.log(1 - rsq) + k * 2
+    return aic
 
+
+def compute_bic(rsq, n, k):
+    # bic = np.log(n) * k + n * np.log(sse / n)
+    bic = n * np.log(1 - rsq) + k * np.log(n)
+    return bic
+
+
+nboot = -1
 d = load_all_data()
 dd = d.set_index('GROUP', drop=False).loc[[3, 4, 5]]
 dd = dd.set_index('PHASE', drop=False).loc[['ADAPTATION']]
 
-m = 1000
-froot = '../fits/fit_kw_adapt_1000'
-# fit_individual(dd, b, m, p, froot)
-inspect_fits_individual(dd, froot)
+b_list = [((0, 1), (0, 1), (0, 1), (0, 1), (0, 1), (-50, 50), (-50, 50),
+           (-50, 50), (-2, 2)),
+          ((0, 1), (0, 1), (0, 1), (0, 1), (0, 1), (0, 0), (-50, 50),
+           (-50, 50), (-2, 2)),
+          ((0, 1), (0, 1), (0, 1), (0, 1), (0, 1), (-50, 50), (0, 0),
+           (-50, 50), (-2, 2)),
+          ((0, 1), (0, 1), (0, 1), (0, 1), (0, 1), (-50, 50), (-50, 50),
+           (0, 0), (-2, 2)),
+          ((0, 1), (0, 1), (0, 1), (0, 1), (0, 1), (-50, 50), (0, 0), (0, 0),
+           (-2, 2)),
+          ((0, 1), (0, 1), (0, 1), (0, 1), (0, 1), (0, 0), (-50, 50), (0, 0),
+           (-2, 2)),
+          ((0, 1), (0, 1), (0, 1), (0, 1), (0, 1), (0, 0), (0, 0), (-50, 50),
+           (-2, 2)),
+          ((0, 1), (0, 1), (0, 1), (0, 1), (0, 1), (0, 0), (0, 0), (0, 0),
+           (-2, 2))]
 
-m = 3000
-froot = '../fits/fit_kw_adapt_3000'
-# fit_individual(dd, b, m, p, froot)
-inspect_fits_individual(dd, froot)
+for i in range(len(b_list)):
 
-m = 5000
-froot = '../fits/fit_kw_adapt_5000'
-# fit_individual(dd, b, m, p, froot)
-inspect_fits_individual(dd, froot)
+    b = b_list[i]
 
-# fit_validate(dd, b, m, p, froot)
+    fit_args = {
+        'obj_func': obj_func,
+        'bounds': b,
+        'disp': True,
+        'maxiter': 1000,
+        'popsize': 15,
+        'mutation': 0.5,
+        'recombination': 0.7,
+        'tol': 1e-15,
+        'polish': False,
+        'updating': 'deferred',
+        'workers': -1
+    }
+
+    froot = '../fits/fit_kw_adapt_' + str(i) + '_'
+    # fit_individual(dd, fit_args, froot)
+
+# inspect_fits_individual_model_compare(dd)
+
 # inspect_fits_individual(dd, froot)
-# inspect_fits_validate(dd, froot)
-
-# d = load_all_data()
-# dd = d.set_index('GROUP', drop=False).loc[[3, 4, 5]]
-# dd = dd.set_index('PHASE', drop=False).loc[['ADAPTATION']]
-# dd = dd[dd['TRIAL_ABS'] < 100]
-# froot = '../fits/fit_kw_adapt_early_'
-# fit_individual(dd, b, m, p, froot)
-# inspect_fits_individual(dd, froot)
-
 # fit_boot(dd, b, m, p, nboot)
 # inspect_fits_boot()
-# inspect_behaviour()
-
+inspect_behaviour()
